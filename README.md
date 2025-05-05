@@ -1,5 +1,6 @@
 
 # ⚡ ASIOS™ Core
+[![Sponsor](https://img.shields.io/github/sponsors/asi-os?label=Sponsor&logo=github)](https://github.com/sponsors/asi-os)
 
 **ASIOS™ Core** is the heart of the OS—a custom Linux kernel and low-level runtime stack tuned for AI-native workloads. It provides:
 
