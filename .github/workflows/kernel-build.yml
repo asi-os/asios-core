@@ -27,7 +27,7 @@ jobs:
             debhelper-compat fakeroot
 
       - name: Build ASIOS kernel
-        run: scripts/common/build-asios-kernel.sh --host-only
+        run: scripts/common/build-asios-kernel.sh 
 
       - name: Package kernel (x86_64)
         if: ${{ matrix.arch == 'x86_64' }}
