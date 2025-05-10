@@ -1,57 +1,50 @@
 #!/usr/bin/env bash
-# build-deb-arm64.sh — Generate Debian packages for ARM64 architecture after kernel build
+# build-deb-arm64.sh — Generate Debian packages for ARM64 after kernel build
 
 set -euo pipefail
-trap 'echo -e "\n❌ Build failed – see ${WORKDIR}" >&2' ERR
+trap 'echo "❌ Build failed – see ${WORKDIR}" >&2' ERR
 
-###############################################################################
-# ── Variables and Setup ------------------------------------------------------
-###############################################################################
+# Ensure the packaging helper that debian/rules expects is installed
+sudo apt-get update
+sudo apt-get install -y debhelper-compat
+
+# Variables
 ARCH="arm64"
-TARGET_DIR="arm64_build"
 KVER=6.11
-WORKDIR="${TARGET_DIR}/kernel-build-${KVER}"
-OUTPUT_DIR="${TARGET_DIR}/output-debs"
 PKGREL=1
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JOBS=$(nproc)
-SIGNING_KEY="certs/asios-signing.pem"
-OVERLAY_SCRIPT="asios-config-overlay.sh"
-LOCALVERSION="-asios"
 KDEB_PKGVERSION="${KVER}-asios${PKGREL}"
+LOCALVERSION="-asios"
 
-# Ensure you're in the correct directory with the compiled kernel
-if [ ! -d "${WORKDIR}" ]; then
+# Determine workdir: prefer arm64_build/, fallback to kernel-build-
+DEFAULT_DIR="${REPO_ROOT}/arm64_build/kernel-build-${KVER}"
+FALLBACK_DIR="${REPO_ROOT}/kernel-build-${KVER}"
+if [ -d "${DEFAULT_DIR}" ]; then
+  WORKDIR="${DEFAULT_DIR}"
+elif [ -d "${FALLBACK_DIR}" ]; then
+  WORKDIR="${FALLBACK_DIR}"
+  echo "↳ Using ${WORKDIR} as kernel source for ${ARCH}"
+else
   echo "Kernel source directory not found. Please ensure the kernel is compiled first."
   exit 1
 fi
 
-# ── Install Dependencies -----------------------------------------------------
-echo "⭑ Installing build pre-reqs for ARM64 ..."
-sudo DEBIAN_FRONTEND=noninteractive apt-get -qq update
-sudo DEBIAN_FRONTEND=noninteractive apt-get -yqq install \
-  build-essential fakeroot bc flex bison libssl-dev libelf-dev dwarves \
-  devscripts debhelper-compat liblz4-dev libzstd-dev libbz2-dev liblzma-dev \
-  dpkg-dev crossbuild-essential-arm64 >/dev/null
+OUTPUT_DIR="${REPO_ROOT}/output-debs"
+mkdir -p "${OUTPUT_DIR}"
 
-###############################################################################
-# ── Build Debian Package -----------------------------------------------------
-###############################################################################
-echo "⭑ Building Debian packages for ${ARCH} ..."
+# Build .deb packages
 cd "${WORKDIR}"
 
-# Make sure the kernel is configured and ready for building
-make ARCH=arm64 olddefconfig
+echo "⭑ Refreshing config (olddefconfig) for ${ARCH}..."
+make ARCH="${ARCH}" olddefconfig
 
-# Build the .deb packages
-fakeroot make -j"$JOBS" \
-        ARCH=arm64 bindeb-pkg \
-        KDEB_PKGVERSION="$KDEB_PKGVERSION" \
-        LOCALVERSION="$LOCALVERSION" \
-        DEB_BUILD_OPTIONS="parallel=$JOBS nodoc"
+echo "⭑ Building Debian packages for ${ARCH}..."
+fakeroot make -j"${JOBS}" \
+      ARCH="${ARCH}" bindeb-pkg \
+      KDEB_PKGVERSION="${KDEB_PKGVERSION}" LOCALVERSION="${LOCALVERSION}" \
+      DEB_BUILD_OPTIONS="parallel=${JOBS} nodoc"
 
-###############################################################################
-# ── Collect Output and Cleanup ----------------------------------------------
-###############################################################################
-mkdir -p "${OUTPUT_DIR}"
+# Move result
 mv ../linux-*.deb "${OUTPUT_DIR}/"
-echo -e "\n✅ Done – packages for ${ARCH} at $(realpath "${OUTPUT_DIR}")"
+echo -e "\n✅ Done – ${ARCH} packages at ${OUTPUT_DIR}"

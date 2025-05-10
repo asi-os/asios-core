@@ -4,10 +4,6 @@
 set -euo pipefail
 trap 'echo "❌ Build failed – see ${WORKDIR}" >&2' ERR
 
-# Ensure the helper for debhelper-compat (=12) is present
-sudo apt-get update
-sudo apt-get install -y debhelper-compat
-
 # Variables
 ARCH="x86_64"
 KVER=6.11
@@ -24,7 +20,7 @@ if [ -d "${DEFAULT_DIR}" ]; then
   WORKDIR="${DEFAULT_DIR}"
 elif [ -d "${FALLBACK_DIR}" ]; then
   WORKDIR="${FALLBACK_DIR}"
-  echo "↳ Using ${WORKDIR} as kernel source for ${ARCH}"
+  echo "↳ Using ${WORKDIR} as kernel source for x86_64"
 else
   echo "Kernel source directory not found. Please ensure the kernel is compiled first."
   exit 1
@@ -47,4 +43,5 @@ fakeroot make -j"${JOBS}" \
 
 # Move result
 mv ../linux-*.deb "${OUTPUT_DIR}/"
-echo -e "\n✅ Done – ${ARCH} packages at ${OUTPUT_DIR}"
+echo -e "\n✅ Done – x86_64 packages at ${OUTPUT_DIR}"
+
