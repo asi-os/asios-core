@@ -1,4 +1,4 @@
-name: CI: Kernel Build
+name: "CI: Kernel Build"
 
 on:
   push:
