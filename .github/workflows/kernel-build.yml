@@ -1,3 +1,5 @@
+# .github/workflows/kernel-build.yml
+
 name: "CI: Kernel Build"
 
 on:
@@ -27,9 +29,10 @@ jobs:
 
       - name: Inject signing key
         run: |
-          mkdir -p certs
-          echo "${{ secrets.ASIOS_SIGNING_KEY }}" > certs/asios-signing.pem
-          chmod 600 certs/asios-signing.pem
+          # place private key where build script expects it (scripts/common/certs)
+          mkdir -p scripts/common/certs
+          echo "${{ secrets.ASIOS_SIGNING_KEY }}" > scripts/common/certs/asios-signing.pem
+          chmod 600 scripts/common/certs/asios-signing.pem
 
       - name: Build ASIOS kernel (both arches)
         env:
