@@ -1,0 +1,8 @@
+x86_64_build/
+arm64_build/
+output-debs/
+*.deb
+certs/*.pem
+!certs/*pub.pem
+*.log
+*~
