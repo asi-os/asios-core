@@ -20,7 +20,8 @@ env:
   DEBIAN_FRONTEND: noninteractive
   ASIOS_CLEANUP: "0"
   USE_DISTRO_CONFIG: "1"
-  COSIGN_VERSION: "v2.0.0"   # pin your desired cosign version
+  COSIGN_VERSION: "v2.0.0"
+  KVER: "6.11"
 
 jobs:
   build:
@@ -41,18 +42,18 @@ jobs:
             build-essential bc flex bison libssl-dev libelf-dev dwarves \
             liblz4-dev libzstd-dev libbz2-dev liblzma-dev \
             crossbuild-essential-arm64 crossbuild-essential-amd64 \
-            qemu-user-static debhelper-compat fakeroot hackbench
+            qemu-user-static debhelper-compat fakeroot
 
       - name: Install cosign
         run: |
           ARCH=$(uname -m)
-          # choose correct binary name
           if [[ "$ARCH" == "x86_64" ]]; then
             BINARY="cosign-linux-amd64"
           else
             BINARY="cosign-linux-arm64"
           fi
-          curl -sSL -o cosign https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/${BINARY}
+          curl -sSL -o cosign \
+            https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/${BINARY}
           chmod +x cosign
           sudo mv cosign /usr/local/bin/
 
@@ -67,7 +68,8 @@ jobs:
       - name: Inject signing key
         run: |
           mkdir -p scripts/common/certs
-          echo "${{ secrets.ASIOS_SIGNING_KEY }}" > scripts/common/certs/asios-signing.pem
+          echo "${{ secrets.ASIOS_SIGNING_KEY }}" \
+            > scripts/common/certs/asios-signing.pem
           chmod 600 scripts/common/certs/asios-signing.pem
 
       - name: Build ASIOS kernel (both arches)
@@ -76,7 +78,7 @@ jobs:
       - name: Prepare packaging tree
         run: |
           mkdir -p scripts/${{ matrix.arch }}/${{ matrix.arch }}_build
-          cp -r scripts/common/${{ matrix.arch }}_build/kernel-build-6.11 \
+          cp -r scripts/common/${{ matrix.arch }}_build/kernel-build-${{ env.KVER }} \
                 scripts/${{ matrix.arch }}/${{ matrix.arch }}_build/
 
       - name: Package kernel (.deb)
@@ -122,8 +124,13 @@ jobs:
           name: asios-debs-${{ matrix.arch }}
           path: asios-debs/
 
-      - name: Install perf tools & hackbench
-        run: sudo apt-get update -qq && sudo apt-get install -y hackbench jq
+      - name: Enable universe & install hackbench
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository universe -y
+          sudo apt-get update -qq
+          sudo apt-get install -y hackbench jq
 
       - name: Install ASIOS kernel (dpkg)
         run: |
