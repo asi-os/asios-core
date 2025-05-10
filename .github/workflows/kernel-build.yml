@@ -10,6 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
 
@@ -26,8 +27,11 @@ jobs:
             crossbuild-essential-arm64 crossbuild-essential-amd64 qemu-user-static \
             debhelper-compat fakeroot
 
-      - name: Build ASIOS kernel
-        run: scripts/common/build-asios-kernel.sh 
+      - name: Build ASIOS kernel (both arches)
+        env:
+          USE_DISTRO_CONFIG: "1"
+          ASIOS_CLEANUP:    "0"
+        run: scripts/common/build-asios-kernel.sh
 
       - name: Package kernel (x86_64)
         if: ${{ matrix.arch == 'x86_64' }}
