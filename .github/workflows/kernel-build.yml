@@ -18,7 +18,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential qemu-user-static crossbuild-essential-arm64
+          sudo apt-get install -y \
+            build-essential bc flex bison libssl-dev libelf-dev dwarves \
+            liblz4-dev libzstd-dev libbz2-dev liblzma-dev \
+            crossbuild-essential-arm64 crossbuild-essential-amd64 qemu-user-static \
+            debhelper-compat fakeroot
 
       - name: Build ASIOS kernel
         run: scripts/common/build-asios-kernel.sh --host-only
