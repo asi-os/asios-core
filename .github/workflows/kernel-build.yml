@@ -29,7 +29,6 @@ jobs:
 
       - name: Inject signing key
         run: |
-          # place private key where build script expects it (scripts/common/certs)
           mkdir -p scripts/common/certs
           echo "${{ secrets.ASIOS_SIGNING_KEY }}" > scripts/common/certs/asios-signing.pem
           chmod 600 scripts/common/certs/asios-signing.pem
@@ -39,6 +38,13 @@ jobs:
           USE_DISTRO_CONFIG: "1"
           ASIOS_CLEANUP:    "0"
         run: scripts/common/build-asios-kernel.sh
+
+      - name: Prepare packaging build trees
+        run: |
+          # copy host build tree into arch-specific folder
+          mkdir -p scripts/x86_64/x86_64_build scripts/arm64/arm64_build
+          cp -r scripts/common/x86_64_build/kernel-build-6.11 scripts/x86_64/x86_64_build/
+          cp -r scripts/common/arm64_build/kernel-build-6.11  scripts/arm64/arm64_build/
 
       - name: Package kernel (x86_64)
         if: ${{ matrix.arch == 'x86_64' }}
@@ -53,3 +59,10 @@ jobs:
           pushd output-debs
           bash ../tests/test-*.sh
           popd
+
+      - name: Upload built .deb packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: asios-debs-${{ matrix.arch }}
+          path: output-debs/*.deb
+          retention-days: 7
