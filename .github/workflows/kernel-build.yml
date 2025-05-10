@@ -13,20 +13,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential qemu-user-static crossbuild-essential-arm64
 
       - name: Build ASIOS kernel
-        run: |
-          scripts/common/build-asios-kernel.sh --host-only
+        run: scripts/common/build-asios-kernel.sh --host-only
 
-      - name: Package (x86_64)
+      - name: Package kernel (x86_64)
         if: ${{ matrix.arch == 'x86_64' }}
         run: scripts/x86_64/build-deb.sh
 
-      - name: Package (ARM64)
+      - name: Package kernel (ARM64)
         if: ${{ matrix.arch == 'aarch64' }}
         run: scripts/arm64/build-deb.sh
 
