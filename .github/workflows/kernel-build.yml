@@ -1,5 +1,3 @@
-# .github/workflows/kernel-build.yml
-
 name: "CI: Kernel Build"
 
 on:
@@ -26,6 +24,12 @@ jobs:
             liblz4-dev libzstd-dev libbz2-dev liblzma-dev \
             crossbuild-essential-arm64 crossbuild-essential-amd64 qemu-user-static \
             debhelper-compat fakeroot
+
+      - name: Inject signing key
+        run: |
+          mkdir -p certs
+          echo "${{ secrets.ASIOS_SIGNING_KEY }}" > certs/asios-signing.pem
+          chmod 600 certs/asios-signing.pem
 
       - name: Build ASIOS kernel (both arches)
         env:
