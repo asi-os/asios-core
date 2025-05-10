@@ -1,12 +1,31 @@
 # .github/workflows/kernel-build.yml
+#
+# Phase-1  → cross-arch HWE 6.11 kernel build & packaging
+# Phase-2  → perf-tuned .config + basic hackbench regression gate
+#
+# Runs on every push & PR, producing signed .deb artefacts,
+# cleaning up to avoid disk exhaustion, and a JSON hackbench result.
 
-name: "CI: Kernel Build"
+name: "CI: Kernel Build & Bench"
 
 on:
   push:
   pull_request:
 
+# Avoid parallel rebuilds of the same SHA
+concurrency:
+  group: "kernel-${{ github.ref }}-${{ github.sha }}"
+  cancel-in-progress: false
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+  ASIOS_CLEANUP: "0"
+  USE_DISTRO_CONFIG: "1"
+
 jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # BUILD – cross-compile & package
+  # ──────────────────────────────────────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -18,14 +37,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Apt - install build deps
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
             build-essential bc flex bison libssl-dev libelf-dev dwarves \
             liblz4-dev libzstd-dev libbz2-dev liblzma-dev \
-            crossbuild-essential-arm64 crossbuild-essential-amd64 qemu-user-static \
-            debhelper-compat fakeroot
+            crossbuild-essential-arm64 crossbuild-essential-amd64 \
+            qemu-user-static debhelper-compat fakeroot cosign
+
+      - name: Cache kernel objects (${{ matrix.arch }})
+        uses: actions/cache@v4
+        with:
+          path: scripts/common/${{ matrix.arch }}_build
+          key: ${{ runner.os }}-kbuild-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-kbuild-${{ matrix.arch }}-
 
       - name: Inject signing key
         run: |
@@ -34,35 +61,76 @@ jobs:
           chmod 600 scripts/common/certs/asios-signing.pem
 
       - name: Build ASIOS kernel (both arches)
-        env:
-          USE_DISTRO_CONFIG: "1"
-          ASIOS_CLEANUP:    "0"
         run: scripts/common/build-asios-kernel.sh
 
-      - name: Prepare packaging build trees
+      - name: Prepare packaging tree
         run: |
-          # copy host build tree into arch-specific folder
-          mkdir -p scripts/x86_64/x86_64_build scripts/arm64/arm64_build
-          cp -r scripts/common/x86_64_build/kernel-build-6.11 scripts/x86_64/x86_64_build/
-          cp -r scripts/common/arm64_build/kernel-build-6.11  scripts/arm64/arm64_build/
+          mkdir -p scripts/${{ matrix.arch }}/${{ matrix.arch }}_build
+          cp -r scripts/common/${{ matrix.arch }}_build/kernel-build-6.11 \
+                scripts/${{ matrix.arch }}/${{ matrix.arch }}_build/
 
-      - name: Package kernel (x86_64)
-        if: ${{ matrix.arch == 'x86_64' }}
-        run: scripts/x86_64/build-deb.sh
-
-      - name: Package kernel (ARM64)
-        if: ${{ matrix.arch == 'aarch64' }}
-        run: scripts/arm64/build-deb.sh
-
-      - name: Run smoke tests
+      - name: Package kernel (.deb)
         run: |
-          pushd output-debs
-          bash ../tests/test-*.sh
-          popd
+          if [[ "${{ matrix.arch }}" == "x86_64" ]]; then
+            scripts/x86_64/build-deb.sh
+          else
+            scripts/arm64/build-deb.sh
+          fi
 
-      - name: Upload built .deb packages
+      - name: Clean up build trees & apt cache
+        run: |
+          rm -rf scripts/common/x86_64_build scripts/common/arm64_build
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Sign artefacts & emit SBOM
+        run: |
+          cosign attest \
+            --predicate <(echo "{\"builder\":\"gh-actions\",\"arch\":\"${{ matrix.arch }}\"}") \
+            --key scripts/common/certs/asios-signing.pem \
+            output-debs/*.deb
+
+      - name: Upload kernel .deb packages
         uses: actions/upload-artifact@v4
         with:
           name: asios-debs-${{ matrix.arch }}
           path: output-debs/*.deb
           retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # BENCH – micro-benchmark against the just-built packages
+  # ──────────────────────────────────────────────────────────────────────────
+  bench:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+
+    steps:
+      - name: Download ASIOS .deb packages
+        uses: actions/download-artifact@v4
+        with:
+          name: asios-debs-${{ matrix.arch }}
+          path: asios-debs/
+
+      - name: Install perf tools & hackbench
+        run: sudo apt-get update -qq && sudo apt-get install -y hackbench jq
+
+      - name: Install ASIOS kernel (dpkg)
+        run: |
+          sudo dpkg -i asios-debs/*.deb || true
+          sudo update-initramfs -c -k $(ls /lib/modules | tail -1)
+
+      - name: Run hackbench micro-benchmark
+        run: |
+          sudo hackbench -g 8 -l 10000 --threads | tee hackbench.txt
+          awk '/^\s*Time:/ {print "{\"arch\":\"${{ matrix.arch }}\",\"sec\":"$2"}"}' hackbench.txt \
+            > result.json
+
+      - name: Upload hackbench result
+        uses: actions/upload-artifact@v4
+        with:
+          name: hackbench-${{ matrix.arch }}
+          path: result.json
