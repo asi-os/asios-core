@@ -6,3 +6,9 @@ certs/*.pem
 !certs/*pub.pem
 *.log
 *~
+# ignore build outputs and signing keys
+output-debs/
+certs/
+scripts/common/*_build/
+scripts/x86_64/*_build/
+scripts/arm64/*_build/
