@@ -15,7 +15,7 @@ concurrency:
 
 env:
   DEBIAN_FRONTEND: noninteractive
-  ASIOS_CLEANUP: "0"          # keep trees until we clean explicitly
+  ASIOS_CLEANUP: "1"          # keep trees until we clean explicitly
   USE_DISTRO_CONFIG: "1"      # start from stock HWE .config
   COSIGN_VERSION: "v2.0.0"
   KVER: "6.11"
@@ -58,74 +58,4 @@ jobs:
       - name: Cross-compile ASIOS kernels (x86_64 + arm64)
         run: scripts/common/build-asios-kernel.sh
 
-      # ── Package per-arch ──────────────────────────────────────────
-      - name: Package x86_64 .deb
-        run: scripts/x86_64/build-deb.sh
-      - name: Package arm64 .deb
-        run: scripts/arm64/build-deb.sh
 
-      # ── Clean build trees to save disk ────────────────────────────
-      - name: Remove build trees & apt cache
-        run: |
-          rm -rf scripts/common/x86_64_build scripts/common/arm64_build
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-
-      # ── Sign with cosign (provenance/SBOM) ────────────────────────
-      - name: Cosign attest .deb
-        run: |
-          for A in x86_64 arm64; do
-            cosign attest \
-              --key scripts/common/certs/asios-signing.pem \
-              --predicate <(echo "{\"builder\":\"gh-actions\",\"arch\":\"${A}\"}") \
-              output-debs/*${A}*.deb
-          done
-
-      # ── Upload artefacts for bench / manual download ─────────────
-      - name: Upload .deb artefacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: asios-debs
-          path: output-debs/*.deb
-          retention-days: 7
-
-# ─────────────────────────────────────────────────────────────────────
-# BENCH – hackbench on each arch, using the just-built packages
-# ─────────────────────────────────────────────────────────────────────
-  bench:
-    needs: build
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
-
-    steps:
-      - name: Download .deb artefacts
-        uses: actions/download-artifact@v4
-        with:
-          name: asios-debs
-          path: asios-debs/
-
-      - name: Install rt-tests (hackbench) & jq
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y rt-tests jq
-
-      - name: Install ASIOS kernel
-        run: |
-          # pick the correct packages for this matrix arch
-          sudo dpkg -i $(ls asios-debs/*${{ matrix.arch }}*.deb) || true
-          sudo update-initramfs -c -k $(ls /lib/modules | tail -1)
-
-      - name: Run hackbench
-        run: |
-          hackbench -g 8 -l 10000 --threads | tee hackbench.txt
-          awk '/^Time:/ {print "{\"arch\":\"${{ matrix.arch }}\",\"sec\":"$2"}"}' \
-            hackbench.txt > result.json
-
-      - name: Upload hackbench result
-        uses: actions/upload-artifact@v4
-        with:
-          name: hackbench-${{ matrix.arch }}
-          path: result.json
