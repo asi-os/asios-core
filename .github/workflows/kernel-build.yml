@@ -5,9 +5,9 @@
 
 name: "CI: Kernel Build & Bench"
 
+# Only run when manually dispatched
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: "kernel-${{ github.ref }}-${{ github.sha }}"
@@ -20,9 +20,6 @@ env:
   COSIGN_VERSION: "v2.0.0"
   KVER: "6.11"
 
-# ─────────────────────────────────────────────────────────────────────
-# BUILD – cross-compile *both* arches once, package & upload
-# ─────────────────────────────────────────────────────────────────────
 jobs:
   build:
     runs-on: ubuntu-latest
