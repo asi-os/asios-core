@@ -15,55 +15,86 @@
 
 ---
 
-## 🛠️ Quickstart: Build & Install
+## 🛠️ Quickstart
 
-### 1. Install Prerequisites
+1. **Install prerequisites** (Ubuntu 24.04 HWE, x86_64 or ARM64):
+   ```bash
+   sudo apt update
+   sudo apt install -y \
+     build-essential flex bison libssl-dev libelf-dev bc \
+     libncurses5-dev git python3-docutils curl \
+     mbw rt-tests fio stress-ng jq
 
-On Ubuntu 24.04 LTS HWE (x86_64 or ARM64):
+
+2. **Clone and prepare**:
+
+   ```bash
+   mkdir -p ~/projects && cd ~/projects
+   git clone https://github.com/asi-os/asios-core.git
+   cd asios-core
+
+   # layout
+   mkdir -p scripts/common scripts/x86_64 scripts/arm64 certs tests
+   cp ~/build-asios-kernel.sh    scripts/common/
+   cp ~/asios-config-overlay.sh  scripts/common/
+   cp ~/build-deb-x86_64.sh      scripts/x86_64/build-deb.sh
+   cp ~/build-deb-arm64.sh       scripts/arm64/build-deb.sh
+   cp ~/certs/asios-signing.pub.pem certs/
+   cp ~/tests/*.sh tests/
+   ```
+
+3. **Build host-only**:
+
+   ```bash
+   export USE_DISTRO_CONFIG=1 ASIOS_CLEANUP=0
+   scripts/common/build-asios-kernel.sh --host-only
+   ```
+
+4. **Package & install**
+
+   * **x86\_64**:
+
+     ```bash
+     scripts/x86_64/build-deb.sh
+     cd output-debs
+     sudo dpkg -i linux-headers-6.11.*_amd64.deb \
+                  linux-image-6.11.*_amd64.deb \
+                  linux-image-6.11.*-dbg_amd64.deb \
+                  linux-libc-dev_*.deb
+     sudo update-initramfs -c -k 6.11.*-asios
+     sudo update-grub && sudo reboot
+     ```
+   * **ARM64**:
+
+     ```bash
+     scripts/arm64/build-deb.sh
+     cd output-debs
+     sudo dpkg -i linux-headers-6.11.*_arm64.deb \
+                  linux-image-6.11.*_arm64.deb \
+                  linux-image-6.11.*-dbg_arm64.deb \
+                  linux-libc-dev_*.deb
+     sudo update-initramfs -c -k 6.11.*-asios
+     sudo update-grub && sudo reboot
+     ```
+
+---
+
+## 🧪 Phase-1 Benchmarks
 
 ```bash
-sudo apt update
-sudo apt install -y build-essential flex bison libssl-dev libelf-dev bc \
-                    libncurses5-dev git python3-docutils
+chmod +x tests/phase1_bench.sh
+sudo tests/phase1_bench.sh \
+  > tests/phase1/$(uname -m)/asios.json
+
+# inspect results
+jq . tests/phase1/$(uname -m)/asios.json
 ```
 
 ---
 
-### 2. Clone the Repo
+## ⚙️ CI (manual)
 
-```bash
-git clone https://github.com/asi-os/asios-core.git
-cd asios-core
-```
-
----
-
-### 3. Configure
-
-Auto-detects host architecture by default. To override:
-
-```bash
-ARCH=x86_64 ./scripts/configure.sh   # for x86_64
-ARCH=arm64  ./scripts/configure.sh   # for ARM64
-```
-
----
-
-### 4. Build
-
-```bash
-make -j$(nproc)
-```
-
----
-
-### 5. Install & Reboot
-
-```bash
-sudo make modules_install install
-sudo update-initramfs -u
-sudo reboot
-```
+This workflow only runs when you click **Run workflow** in GitHub Actions.
 
 ---
 
