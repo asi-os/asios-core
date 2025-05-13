@@ -1,0 +1,12 @@
+// x86_64
+
+Running in threaded mode with 8 groups using 40 file descriptors each (== 320 t>
+Each sender will pass 10000 messages of 100 bytes
+Time: 53.909
+
+
+// arm64
+
+Running in threaded mode with 8 groups using 40 file descriptors each (== 320 t>
+Each sender will pass 10000 messages of 100 bytes
+Time: 5.044

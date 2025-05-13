@@ -1,0 +1,17 @@
+// x86_64
+
+{
+  "mbw": 7274.133,
+  "hackbench": 53.090,
+  "fio": 1590,
+  "stress": "ok"
+}
+
+// arm64
+{
+  "mbw": 27397.260,
+  "hackbench": 4.826,
+  "fio": 3230,
+  "stress": "ok"
+}
+
